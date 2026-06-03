@@ -1,75 +1,72 @@
-# Vulnerability Scanner
+### Vulnerability Scanner v1.1
 
-A simple yet powerful network vulnerability scanner built in Python for educational and internship purposes.
+A simple bit improved powerful network vulnerability scanner with both **Command Line Interface (CLI)** and **Web Interface (Streamlit)**.
 
 ## Description
 
-This tool performs basic network reconnaissance by scanning ports, grabbing service banners, checking for missing HTTP security headers, and identifying potentially risky open ports. It is designed to be lightweight, fast, and easy to use.
+This tool helps users perform basic network reconnaissance by scanning ports, grabbing banners, checking for missing security headers, detecting dangerous HTTP methods, identifying server version leaks, and discovering sensitive paths. It is designed for educational purposes and cybersecurity learning.
 
 ## Features
 
-- Multi-threaded port scanning (fast)
+- Multi-threaded port scanning with progress bar
 - Service banner grabbing
-- HTTP Security Header analysis (for ports 80 & 443)
-- Detection of commonly dangerous ports (Telnet, SMB, RDP, etc.)
-- Clean and colored terminal output with progress bar
-- Results displayed in a formatted table
-- Option to save reports in both JSON and TXT format
+- Detection of missing HTTP security headers
+- Check for dangerous HTTP methods (TRACE, PUT, DELETE, etc.)
+- Server header exposure detection
+- Sensitive path discovery on web servers
+- Basic SSL/TLS certificate information
+- Clean and user-friendly Streamlit web interface
+- Option to save scan reports (JSON + TXT)
 - Supports both IP addresses and domain names
+
+## Tech Stack
+
+- Python 3
+- Streamlit (Web Interface)
+- Rich (Terminal UI)
+- Requests + Socket (Network operations)
 
 ## Installation
 
-### Prerequisites
-- Python 3.10 or higher
-- pip
+### 1. Clone the repository
 
-### Setup
-
-```bash
-git clone <your-repo-link>
-cd vuln_scanner
-
-python -m venv venv
-venv\Scripts\activate          # On Windows
-# source venv/bin/activate     # On Mac/Linux
+```
+git clone https://github.com/ningshenball/vuln-scanner-1.1.git
+cd vuln-scanner-1.1
+```
+### 2. Create virtual environment & install dependencies
+```
+Bashpython -m venv venv
+venv\Scripts\activate          # Windows
+# source venv/bin/activate     # Mac/Linux
 
 pip install -r requirements.txt
-
 Usage
-Basic Scan
-Bashpython main.py 192.168.1.1 -p 1-500
-Scan with Report Saving
-Bashpython main.py scanme.nmap.org -p 1-1000 --save
-Full Example
-Bashpython main.py 192.168.1.1 -p 1-1000 --save
-Example Output
-textVulnerability Scanner
-
-Target: 192.168.1.1   Ports: 1-1000
-
-Scanning ports... 100% [████████████████████] 00:00:07
-
-Port 53 OPEN → Normal service
-Port 80 OPEN → Normal service
-   Missing Headers: Content-Security-Policy, Strict-Transport-Security, X-Content-Type-Options, Referrer-Policy
-Port 443 OPEN → Normal service
-
-Scan Results
-+------+--------+------------------+
-| Port | Risk   | Notes            |
-+------+--------+------------------+
-| 53   | LOW    | Normal service   |
-| 80   | LOW    | Normal service   |
-| 443  | LOW    | Normal service   |
-+------+--------+------------------+
-
-Total open ports found: 3
-Report saved as: report_2026-06-03_02-46-31.json + .txt
-Project Structure
-textvuln_scanner/
-├── main.py          # Entry point and CLI
-├── scanner.py       # Port scanning and banner grabbing
-├── checks.py        # Dangerous ports and HTTP header checks
-├── report.py        # Report generation (JSON + TXT)
+CLI Version
+Bashpython main.py 192.168.1.1 -p 1-500 --save
+Streamlit Web Version
+Bashstreamlit run app.py
+Then open the link shown in the terminal (usually http://localhost:8501).
+```
+### Project Structure
+textvuln-scanner-1.1/
+├── main.py           # CLI version
+├── app.py            # Streamlit web version
+├── scanner.py        # Core scanning logic
+├── checks.py         # Security checks
+├── report.py         # Report generation
 ├── requirements.txt
+├── .gitignore
 └── README.md
+### Example Output (Streamlit)
+```
+<img src="https://via.placeholder.com/800x400?text=Add+your+screenshot+here" alt="Streamlit Interface">
+````
+### Future Improvements
+- Add more vulnerability checks (SQLi, XSS detection hints)
+- Better service fingerprinting
+- PDF/HTML report export
+- Authentication & rate limiting for web version
+- Docker support
+
+### Built as part of Cyber Security learning 
