@@ -9,6 +9,7 @@ st.set_page_config(page_title="Vulnerability Scanner", layout="centered")
 st.title("(✿◠‿◠) Vulnerability Scanner")
 st.markdown("A simple web-based network vulnerability scanner")
 
+# ==================== INPUT SECTION ====================
 st.subheader("(◕‿◕) Scan Configuration")
 
 col1, col2 = st.columns(2)
@@ -54,7 +55,7 @@ if st.button("(ง •̀_•́)ง Start Scan", type="primary", use_container_wi
                     return "background-color: #ccffcc; color: #006600"
 
             styled_df = df_display.style.map(color_risk, subset=["Risk Level"])
-            st.dataframe(styled_df, use_container_width=True)
+            st.dataframe(styled_df, width='stretch')
 
             # Missing Security Headers
             st.subheader("(X_X) Missing Security Headers")
