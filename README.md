@@ -49,23 +49,17 @@ Bashstreamlit run app.py
 Then open the link shown in the terminal (usually http://localhost:8501).
 ```
 ### Project Structure
-textvuln-scanner-1.1/
-
+```
+vuln-scanner-1.1/
 ├── main.py           # CLI version
-
 ├── app.py            # Streamlit web version
-
 ├── scanner.py        # Core scanning logic
-
 ├── checks.py         # Security checks
-
 ├── report.py         # Report generation
-
 ├── requirements.txt
 ├── .gitignore
-
 └── README.md
-
+```
 ### Example Output (Streamlit)
 ```
 <img src="https://via.placeholder.com/800x400?text=Add+your+screenshot+here" alt="Streamlit Interface">
