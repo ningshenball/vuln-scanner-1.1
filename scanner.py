@@ -4,7 +4,8 @@ import requests
 import ssl
 from datetime import datetime
 from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeElapsedColumn
-from checks import get_dangerous_ports, get_important_headers
+from checks import get_dangerous_ports, get_important_headers, get_http_ports, is_https_port
+
 
 def scan_port(target, port, timeout=1.5):
     try:
@@ -14,21 +15,23 @@ def scan_port(target, port, timeout=1.5):
     except:
         return (port, False)
 
+
 def grab_banner(target, port, timeout=2.0):
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.settimeout(timeout)
             s.connect((target, port))
-            if port in [80, 443]:
+            if port in get_http_ports():
                 s.send(b"HEAD / HTTP/1.0\r\n\r\n")
             banner = s.recv(1024).decode(errors="ignore").strip()
             return banner[:120] if banner else "No banner"
     except:
         return "No banner"
 
+
 def check_http_headers(target, port):
-    protocol = "https" if port == 443 else "http"
-    url = f"{protocol}://{target}"
+    protocol = "https" if is_https_port(port) else "http"
+    url = f"{protocol}://{target}:{port}"
     try:
         response = requests.get(url, timeout=5, verify=False)
         headers = response.headers
@@ -36,6 +39,7 @@ def check_http_headers(target, port):
         return missing
     except:
         return ["Could not retrieve headers"]
+
 
 def check_ssl_certificate(target, port=443):
     try:
@@ -60,13 +64,13 @@ def check_ssl_certificate(target, port=443):
     except Exception as e:
         return {"error": str(e)}
 
+
 def check_http_methods(target, port):
-    """Check for dangerous HTTP methods"""
-    protocol = "https" if port == 443 else "http"
-    url = f"{protocol}://{target}"
-    
+    protocol = "https" if is_https_port(port) else "http"
+    url = f"{protocol}://{target}:{port}"
+
     dangerous_methods = ["TRACE", "PUT", "DELETE", "CONNECT"]
-    enabled_methods = []
+    enabled_methods = set()
 
     try:
         response = requests.options(url, timeout=5, verify=False)
@@ -74,28 +78,28 @@ def check_http_methods(target, port):
 
         for method in dangerous_methods:
             if method in allow_header:
-                enabled_methods.append(method)
+                enabled_methods.add(method)
 
         try:
             trace_response = requests.request("TRACE", url, timeout=5, verify=False)
             if trace_response.status_code == 200:
-                enabled_methods.append("TRACE")
+                enabled_methods.add("TRACE")
         except:
             pass
 
-        return enabled_methods if enabled_methods else ["No dangerous methods detected"]
+        return list(enabled_methods) if enabled_methods else ["No dangerous methods detected"]
     except:
         return ["Could not check HTTP methods"]
 
+
 def check_server_header(target, port):
-    """Check if server version is being exposed"""
-    protocol = "https" if port == 443 else "http"
-    url = f"{protocol}://{target}"
-    
+    protocol = "https" if is_https_port(port) else "http"
+    url = f"{protocol}://{target}:{port}"
+
     try:
         response = requests.get(url, timeout=5, verify=False)
         server_header = response.headers.get("Server", "")
-        
+
         if server_header:
             return {
                 "exposed": True,
@@ -115,36 +119,47 @@ def check_server_header(target, port):
             "risk": "Unknown"
         }
 
+
 def check_sensitive_paths(target, port):
-    """Check for common sensitive paths"""
-    protocol = "https" if port == 443 else "http"
-    
+    protocol = "https" if is_https_port(port) else "http"
+
     sensitive_paths = [
         "/admin", "/login", "/dashboard", "/config", "/.env",
         "/backup", "/wp-admin", "/phpinfo.php", "/server-status"
     ]
-    
+
     found_paths = []
-    
+
     for path in sensitive_paths:
         try:
-            url = f"{protocol}://{target}{path}"
+            url = f"{protocol}://{target}:{port}{path}"
             response = requests.get(url, timeout=4, verify=False, allow_redirects=False)
-            
+
             if response.status_code == 200:
                 found_paths.append({
                     "path": path,
                     "status": response.status_code,
-                    "size": len(response.content)
+                    "size": len(response.content),
+                    "note": "Accessible"
+                })
+            elif response.status_code == 403:
+                found_paths.append({
+                    "path": path,
+                    "status": response.status_code,
+                    "size": len(response.content),
+                    "note": "Access denied (path exists but protected)"
                 })
         except:
             continue
-    
+
     return found_paths if found_paths else ["No sensitive paths found"]
+
 
 def scan_target(target, start_port, end_port):
     open_ports = []
     ports = list(range(start_port, end_port + 1))
+    http_ports = get_http_ports()
+    dangerous_ports = get_dangerous_ports()
 
     with Progress(
         SpinnerColumn(),
@@ -155,7 +170,7 @@ def scan_target(target, start_port, end_port):
     ) as progress:
         task = progress.add_task("[cyan]Scanning ports...", total=len(ports))
 
-        with ThreadPoolExecutor(max_workers=200) as executor:
+        with ThreadPoolExecutor(max_workers=100) as executor:
             futures = {executor.submit(scan_port, target, p): p for p in ports}
             for future in as_completed(futures):
                 port, is_open = future.result()
@@ -166,30 +181,27 @@ def scan_target(target, start_port, end_port):
     results = []
     for port in sorted(open_ports):
         banner = grab_banner(target, port)
-        risk = get_dangerous_ports().get(port, "Normal service")
+        risk = dangerous_ports.get(port, "Normal service")
+        level = "HIGH" if port in dangerous_ports else "LOW"
 
         header_issues = []
-        if port in [80, 443]:
-            header_issues = check_http_headers(target, port)
-
         ssl_info = None
-        if port == 443:
-            ssl_info = check_ssl_certificate(target, port)
-
         http_methods = []
-        if port in [80, 443]:
-            http_methods = check_http_methods(target, port)
-
         server_info = None
-        if port in [80, 443]:
-            server_info = check_server_header(target, port)
-
         sensitive_paths = []
-        if port in [80, 443]:
+
+        if port in http_ports:
+            header_issues = check_http_headers(target, port)
+            http_methods = check_http_methods(target, port)
+            server_info = check_server_header(target, port)
             sensitive_paths = check_sensitive_paths(target, port)
+
+        if is_https_port(port):
+            ssl_info = check_ssl_certificate(target, port)
 
         results.append({
             "port": port,
+            "level": level,
             "risk": risk,
             "banner": banner,
             "header_issues": header_issues,
