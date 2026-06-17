@@ -2,7 +2,7 @@ import streamlit as st
 import socket
 import pandas as pd
 from scanner import scan_target
-from report import save_report as save_report_func
+from report import save_report
 
 st.set_page_config(page_title="Vulnerability Scanner", layout="centered")
 
@@ -18,7 +18,7 @@ with col1:
 with col2:
     port_range = st.text_input("Port Range", value="1-500")
 
-save_report = st.checkbox("Save report after scan", value=True)
+do_save_report = st.checkbox("Save report after scan", value=True)
 
 if st.button("(ง •̀_•́)ง Start Scan", type="primary", use_container_width=True):
     if not target:
@@ -32,9 +32,14 @@ if st.button("(ง •̀_•́)ง Start Scan", type="primary", use_container_wi
             st.stop()
 
         try:
-            start_port, end_port = map(int, port_range.split("-"))
-        except:
-            st.error("(╥﹏╥) Invalid port range. Use format like 1-500")
+            parts = port_range.split("-")
+            if len(parts) != 2:
+                raise ValueError
+            start_port, end_port = int(parts[0]), int(parts[1])
+            if not (1 <= start_port <= 65535 and 1 <= end_port <= 65535 and start_port <= end_port):
+                raise ValueError
+        except (ValueError, AttributeError):
+            st.error("(╥﹏╥) Invalid port range. Use format like 1-500 with valid port numbers (1-65535).")
             st.stop()
 
         with st.spinner(f"(｡♥‿♥｡) Scanning {ip} on ports {start_port}-{end_port}..."):
@@ -45,17 +50,18 @@ if st.button("(ง •̀_•́)ง Start Scan", type="primary", use_container_wi
 
             # Results Table
             df = pd.DataFrame(results)
-            df_display = df[["port", "risk", "banner"]].copy()
-            df_display.columns = ["Port", "Risk Level", "Banner / Info"]
+            df_display = df[["port", "level", "risk", "banner"]].copy()
+            df_display.columns = ["Port", "Risk Level", "Description", "Banner / Info"]
 
             def color_risk(val):
                 if val == "HIGH":
                     return "background-color: #ffcccc; color: #b30000; font-weight: bold"
-                else:
+                elif val == "LOW":
                     return "background-color: #ccffcc; color: #006600"
+                return ""
 
             styled_df = df_display.style.map(color_risk, subset=["Risk Level"])
-            st.dataframe(styled_df, width='stretch')
+            st.dataframe(styled_df, use_container_width=True)
 
             # Missing Security Headers
             st.subheader("(X_X) Missing Security Headers")
@@ -70,11 +76,11 @@ if st.button("(ง •̀_•́)ง Start Scan", type="primary", use_container_wi
             for r in results:
                 if r.get("http_methods"):
                     methods = r["http_methods"]
-                    if any("No dangerous" not in m for m in methods):
+                    dangerous = [m for m in methods if "No dangerous" not in m and "Could not" not in m]
+                    if dangerous:
                         with st.expander(f"> Port {r['port']} - Dangerous Methods Found"):
-                            for m in methods:
-                                if "No dangerous" not in m:
-                                    st.error(f"• {m}")
+                            for m in dangerous:
+                                st.error(f"• {m}")
                     else:
                         st.success(f"(◕‿◕) Port {r['port']}: No dangerous methods detected")
 
@@ -93,11 +99,15 @@ if st.button("(ง •̀_•́)ง Start Scan", type="primary", use_container_wi
             for r in results:
                 if r.get("sensitive_paths"):
                     paths = r["sensitive_paths"]
-                    if any("No sensitive" not in str(p) for p in paths):
+                    found = [p for p in paths if isinstance(p, dict)]
+                    if found:
                         with st.expander(f"> Port {r['port']} - Sensitive Paths Found"):
-                            for p in paths:
-                                if isinstance(p, dict):
-                                    st.warning(f"• {p['path']} (Status: {p['status']})")
+                            for p in found:
+                                label = f"• {p['path']} (Status: {p['status']} — {p.get('note', '')})"
+                                if p["status"] == 200:
+                                    st.error(label)
+                                else:
+                                    st.warning(label)
                     else:
                         st.success(f"(◕‿◕) Port {r['port']}: No sensitive paths found")
 
@@ -107,18 +117,18 @@ if st.button("(ง •̀_•́)ง Start Scan", type="primary", use_container_wi
             for r in results:
                 if r.get("ssl_info") and "error" not in r["ssl_info"]:
                     ssl_shown = True
-                    ssl = r["ssl_info"]
+                    ssl_data = r["ssl_info"]
                     st.write(f"> Port {r['port']}")
-                    st.write(f"  - Issuer: {ssl['issuer']}")
-                    st.write(f"  - Expires in: {ssl['days_until_expiry']} days")
-                    st.write(f"  - Status: {ssl['status']}")
+                    st.write(f"  - Issuer: {ssl_data['issuer']}")
+                    st.write(f"  - Expires in: {ssl_data['days_until_expiry']} days")
+                    st.write(f"  - Status: {ssl_data['status']}")
                     st.divider()
             if not ssl_shown:
                 st.info("(｡•́︿•̀｡) No SSL/TLS information available.")
 
             # Save Report
-            if save_report:
-                saved_name = save_report_func(target, results)
+            if do_save_report:
+                saved_name = save_report(target, results)
                 st.success(f"(ﾉ◕ヮ◕)ﾉ*:･ﾟ✧ Report saved as {saved_name}.json and {saved_name}.txt")
 
         else:

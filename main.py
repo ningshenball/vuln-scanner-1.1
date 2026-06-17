@@ -9,19 +9,34 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from scanner import scan_target, set_console
+from scanner import scan_target
 from report import save_report
 from checks import get_dangerous_ports
 
 console = Console()
 
+
 def resolve_target(target):
-    """Convert domain to IP if needed"""
     try:
         return socket.gethostbyname(target)
     except socket.gaierror:
         console.print(f"[red]Error:[/red] Could not resolve domain '{target}'")
         return None
+
+
+def parse_port_range(port_str):
+    try:
+        parts = port_str.split("-")
+        if len(parts) != 2:
+            raise ValueError
+        start, end = int(parts[0]), int(parts[1])
+        if not (1 <= start <= 65535 and 1 <= end <= 65535 and start <= end):
+            raise ValueError
+        return start, end
+    except (ValueError, AttributeError):
+        console.print(f"[yellow]Warning:[/yellow] Invalid port range '{port_str}', defaulting to 1-500")
+        return 1, 500
+
 
 def main():
     parser = argparse.ArgumentParser(description="Vulnerability Scanner")
@@ -30,22 +45,16 @@ def main():
     parser.add_argument("--save", action="store_true", help="Save report to file")
     args = parser.parse_args()
 
-    # Resolve domain to IP
     ip = resolve_target(args.target)
     if not ip:
         return
 
-    try:
-        start, end = map(int, args.ports.split("-"))
-    except:
-        start, end = 1, 500
+    start, end = parse_port_range(args.ports)
 
-    console.print(Panel.fit("[bold green]Vulnerability Scanner[/bold green]", 
-                            border_style="green", padding=(1,2)))
-
+    console.print(Panel.fit("[bold green]Vulnerability Scanner[/bold green]",
+                            border_style="green", padding=(1, 2)))
     console.print(f"[cyan]Target:[/cyan] {args.target} ({ip})   [cyan]Ports:[/cyan] {start}-{end}\n")
 
-    set_console(console)
     results = scan_target(ip, start, end)
 
     if results:
@@ -55,8 +64,7 @@ def main():
         table.add_column("Notes")
 
         for r in results:
-            level = "HIGH" if r["port"] in get_dangerous_ports() else "LOW"
-            table.add_row(str(r["port"]), level, r["risk"])
+            table.add_row(str(r["port"]), r["level"], r["risk"])
 
         console.print(table)
         console.print(f"\n[bold green]Total open ports found: {len(results)}[/bold green]")
@@ -66,6 +74,7 @@ def main():
             console.print(f"[green]Report saved as:[/green] {saved_name}.json + .txt")
     else:
         console.print("[yellow]No open ports found.[/yellow]")
+
 
 if __name__ == "__main__":
     main()
